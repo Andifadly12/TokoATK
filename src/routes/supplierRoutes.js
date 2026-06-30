@@ -20,4 +20,17 @@ router.get('/', async (req, res) => {
 })
 
 
+router.get('/:id', async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT * FROM "TokoATK".suppliers WHERE id=$1`, [req.params.id])
+        res.status(200).json(result.rows[0])
+    } catch (error) {
+        console.log('ERROR gagarl mengambil suplaier', error);
+        return res.status(500).json({
+            massage:'gagal temukan suplaer'
+        })
+    }
+})
+
+
 export default router
