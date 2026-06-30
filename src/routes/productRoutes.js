@@ -65,7 +65,7 @@ router.post("/", async (req, res) => {
       ]
     );
 
-    res.status(201).json({
+    res.status(200).json({
       message: "Data berhasil ditambah",
       data: result.rows[0],
     });
@@ -81,44 +81,82 @@ router.post("/", async (req, res) => {
 
 
 
-router.put('/', async (req, res) => {
-    try {
-        const {
-            category_id,
-            name,
-            sku,
-            unit,
-            purchase_price,
-            selling_price,
-            stock
-        } = req.body;
+router.put("/:id", async (req, res) => {
+  try {
+    const {
+      category_id,
+      name,
+      sku,
+      unit,
+      purchase_price,
+      selling_price,
+      stock,
+    } = req.body;
 
-        const result = await pool.query(
-            `
-            UPDATE "TokoATK".products SET
-            category_id=$1,
-            name=$2,
-            sku=$3,
-            unit=$4,
-            purchase_price=$5,
-            selling_price=$6,
-            stock=$7 WHERE
-            id=$8 RETURNING *
-            `, [category_id, name, sku, unit, purchase_price, selling_price, stock, req.params.id])
-    } catch (error) {
-        console.log('error server bermasalah', error);
-        return res.status(500).json({
-            massage: 'saat ini ada error pada server',
-            error: error.massage
-            
-        })
+    const result = await pool.query(
+      `
+      UPDATE "TokoATK".products
+      SET category_id = COALESCE($1, category_id),
+          name = COALESCE($2, name),
+          sku = COALESCE($3, sku),
+          unit = COALESCE($4, unit),
+          purchase_price = COALESCE($5, purchase_price),
+          selling_price = COALESCE($6, selling_price),
+          stock = COALESCE($7, stock)
+      WHERE id = $8
+      RETURNING *
+      `,
+      [
+        category_id,
+        name,
+        sku,
+        unit,
+        purchase_price,
+        selling_price,
+        stock,
+        req.params.id,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Product tidak ditemukan",
+      });
     }
-})
 
+    res.status(200).json({
+      message: "Data berhasil diupdate",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.log("Error server:", error);
 
-router.delete('/', async(req, res) => {
+    if (error.code === "23505") {
+      return res.status(400).json({
+        message: "SKU sudah digunakan oleh produk lain",
+      });
+    }
+
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+router.delete('/:id', async(req, res) => {
     try {
-        
+        const result = await pool.query(`DELETE FROM "TokoATK".products WHERE id=$1 RETURNING *`, [req.params.id])
+         if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: "Product tidak ditemukan",
+        });
+      }
+
+      res.json({
+        message: "Product berhasil dihapus",
+        data: result.rows[0],
+      });
     } catch (error) {
           console.log("ERROR this server", error);
         return res.status(500).json({
