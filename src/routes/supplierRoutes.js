@@ -33,4 +33,74 @@ router.get('/:id', async (req, res) => {
 })
 
 
+
+router.post('/', async (req, res) => {
+    try {
+        const {
+            name,
+            phone,
+            address }
+            = req.body;
+        if (!name) {
+      return res.status(400).json({
+        message: "Nama supplier wajib diisi",
+      });
+    }
+        const result = await pool.query(`INSERT INTO "TokoATK".suppliers (name, phone, address) VALUES ($1, $2 ,$3) RETURNING *`, [name, phone, address])
+        res.status(201).json({
+            massage: 'data berhasil ditambah',
+            data: result.rows[0]
+        })
+    } catch (error) {
+        console.log("Error data tidak di temuakan", error);
+        return res.status(500).json({
+            massage: 'error data tidak dapat ditemukan',
+            error: error.massage
+        })
+    }
+})
+
+
+
+router.put('/:id', async (req, res) => {
+    try {
+        const {
+            name,
+            phone,
+            address
+        }
+            = req.body;
+        const result = await pool.query(`
+            UPDATE "TokoATK".suppliers SET name=$1, phone=$2, address=$3 WHERE id =$4 RETURNING *
+            `,
+            [name, phone, address, req.params.id]
+        );
+        res.status(200).json(result.rows[0])
+    } catch (error) {
+        console.log('data tidak daoat diupdate', error);
+        return res.status(500).json({
+            massage: 'data tidak dapat di update',
+            error:error.massage
+        })
+    }
+})
+
+
+
+router.delete('/:id', async (req, res) => {
+    try {
+        const result = await pool.query(`DELETE FROM "TokoATK".suppliers WHERE id=$1 RETURNING *`, [req.params.id]);
+        res.json({
+            message: "Customer berhasil dihapus",
+            data: result.rows[0],
+        })
+    } catch (error) {
+        console.log("data tidak dapat dihapus", error);
+        return res.status(500).json({
+            massage: 'data tidak dapat dihapus',
+            error: error.massage
+        })
+    }
+})
+
 export default router
