@@ -31,6 +31,7 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import customerRoutes from "./routes/cutomerRoutes.js"
 import productRoutes from "./routes/productRoutes.js"
 import SupplierRoutes from "./routes/supplierRoutes.js"
+import authRoutes from "./routes/authRoutes.js"
 dotenv.config();
 
 const app = express();
@@ -42,6 +43,7 @@ app.get("/", (req, res) => {
   res.json({
     message: "Selamat datang di API TokoATK",
     routes: {
+      auth: "/auth",
       users: "/users",
       categories: "/categories",
       customers: "/customers",
@@ -50,7 +52,7 @@ app.get("/", (req, res) => {
     },
   });
 });
-
+app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/categories", categoryRoutes);
 app.use('/customers', customerRoutes);
