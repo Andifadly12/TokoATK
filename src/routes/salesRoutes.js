@@ -99,3 +99,6 @@ router.delete('/:id', authMiddleware, roleMiddleware("admin", "kasir"), async (r
         return res.status(500).json({ error: 'Internal Server Error' })
     }
 })
+
+
+export default router
