@@ -1,9 +1,10 @@
 import express from "express";
 import { pool } from "../config/db.js";
-
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 const router = express.Router()
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, roleMiddleware("admin","kasir"), async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM "TokoATK".customers ORDER BY id ASC`)
     return res.json(result.rows)
@@ -13,7 +14,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.post('/', async(req, res)=>{
+router.post('/', authMiddleware, roleMiddleware("admin", "kasir"    ), async(req, res)=>{
     try {
         const { name, phone, address } = req.body;
 
@@ -26,7 +27,7 @@ router.post('/', async(req, res)=>{
     }
 })
 
-router.put('/:id', async(req, res)=>{
+router.put('/:id', authMiddleware, roleMiddleware("admin",), async(req, res)=>{
     try {
         const {name, phone, address} = req.body;
         const result= await pool.query(
@@ -42,7 +43,7 @@ console.log('EEROR terjadi kesalahan update ', error);
 
 
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(`DELETE FROM "TokoATK".customers WHERE id=$1 RETURNING *`, [req.params.id])
         res.json({
@@ -55,8 +56,4 @@ router.delete('/:id', async (req, res) => {
     }
 })
 
-
-router.delete('/:id', async(req, res)=>{
-
-})
 export default router

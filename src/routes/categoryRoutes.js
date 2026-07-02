@@ -1,9 +1,10 @@
 import express from "express";
 import { pool } from "../config/db.js";
-
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT * FROM "TokoATK".categories ORDER BY id ASC`
@@ -15,7 +16,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.post('/', async (req, res)=>{
+router.post('/',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
     
     try {
         const {name}= req.body;
@@ -31,7 +32,7 @@ router.post('/', async (req, res)=>{
 })
 
 
-router.put('/:id', async (req, res)=>{
+router.put('/:id',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
     try{
         const {name}= req.body;
         const result= await pool.query(`UPDATE "TokoATK".categories SET name = $1 WHERE id = $2 RETURNING *`, [name, req.params.id])
@@ -42,7 +43,7 @@ router.put('/:id', async (req, res)=>{
     }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(
             `DELETE FROM "TokoATK".categories WHERE id = $1 RETURNING id, name`,

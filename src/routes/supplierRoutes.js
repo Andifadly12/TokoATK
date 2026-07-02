@@ -1,11 +1,12 @@
 import express from 'express';
 import { pool } from '../config/db.js'
-
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
 
-router.get('/', async (req, res) => {
+router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM "TokoATK".suppliers ORDER BY id ASC`);
         res.json(result.rows)
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
 })
 
 
-router.get('/:id', async (req, res) => {
+router.get('/:id',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM "TokoATK".suppliers WHERE id=$1`, [req.params.id])
         res.status(200).json(result.rows[0])
@@ -34,7 +35,7 @@ router.get('/:id', async (req, res) => {
 
 
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const {
             name,
@@ -62,7 +63,7 @@ router.post('/', async (req, res) => {
 
 
 
-router.put('/:id', async (req, res) => {
+router.put('/:id',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const {
             name,
@@ -87,7 +88,7 @@ router.put('/:id', async (req, res) => {
 
 
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try {
         const result = await pool.query(`DELETE FROM "TokoATK".suppliers WHERE id=$1 RETURNING *`, [req.params.id]);
         res.json({

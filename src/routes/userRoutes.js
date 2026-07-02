@@ -21,7 +21,7 @@ router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
 
 })
 
-router.get('/:id', async (req, res)=>{
+router.get('/:id',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
     try{
         const result = await pool.query(
             `SELECT id, name, email, role, created_at FROM "TokoATK".users WHERE id = $1`,
@@ -73,7 +73,7 @@ router.get('/:id', async (req, res)=>{
 //   }
 // });
 
-router.post("/", async (req, res) => {
+router.post("/",authMiddleware, roleMiddleware("admin"), async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -107,7 +107,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id",authMiddleware, roleMiddleware("admin"), async (req, res) => {
   try {
     const { name, email, role } = req.body;
 
@@ -136,7 +136,7 @@ error: error.message,
 });
 
 
-router.delete('/:id', async (req, res)=>{
+router.delete('/:id',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
     try{
         const result = await pool.query(
             `DELETE FROM "TokoATK".users WHERE id=$1 RETURNING id, name, email, role, created_at`,
