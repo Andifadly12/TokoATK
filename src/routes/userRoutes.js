@@ -1,9 +1,11 @@
 import express from "express";
 import {pool} from "../config/db.js";
-
+import bcrypt from "bcrypt";
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
     try{
         const result= await pool.query(
             `SELECT id, name, email, role, created_at from "TokoATK".users ORDER BY id ASC`
@@ -74,7 +76,7 @@ router.get('/:id', async (req, res)=>{
 router.post("/", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-
+    const hashedPassword = await bcrypt.hash(password, 10);
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "Name, email, dan password wajib diisi",
@@ -88,7 +90,7 @@ router.post("/", async (req, res) => {
       VALUES ($1, $2, $3, $4)
       RETURNING id, name, email, role, created_at
       `,
-      [name, email, password, role || "kasir"]
+      [name, email, hashedPassword, role || "kasir"]
     );
 
     res.status(201).json({
