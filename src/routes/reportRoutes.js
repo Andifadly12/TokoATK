@@ -121,4 +121,42 @@ router.get(
     }
   }
 );
+
+
+
+router.get(
+  "/stock-movements",
+  authMiddleware,
+  roleMiddleware("admin"),
+  async (req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT
+          sm.id,
+          sm.product_id,
+          p.name AS product_name,
+          sm.user_id,
+          u.name AS user_name,
+          sm.type,
+          sm.quantity,
+          sm.description,
+          sm.created_at
+        FROM "TokoATK".stock_movements sm
+        LEFT JOIN "TokoATK".products p ON sm.product_id = p.id
+        LEFT JOIN "TokoATK".users u ON sm.user_id = u.id
+        ORDER BY sm.id DESC
+      `);
+
+      res.json({
+        message: "Berhasil mengambil laporan pergerakan stok",
+        data: result.rows,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Gagal mengambil laporan pergerakan stok",
+        error: error.message,
+      });
+    }
+  }
+);
 export default router;
