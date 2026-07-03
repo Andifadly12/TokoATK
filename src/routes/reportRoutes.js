@@ -62,9 +62,63 @@ router.get("/sales", authMiddleware, roleMiddleware("admin"), async (req, res) =
         })
     } catch (error) {
         res.status(500).json({
-            massage: "Gagal mengambil data summary",
+            massage: "Gagal mengambil data pnjualan",
             error: error.message,
         })
     }
 })
+
+
+// router.get('/stock', async (req, res) => {
+//     try {
+//         const result = await pool.query(`
+//             SELECT 
+//                 p.id,
+//                 p.name,
+//                 p.stock,
+//                 p.purchase_price,
+//                 p.selling_price,
+//                 c.name AS category_name
+//             FROM "TokoATK".products p
+//             LEFT JOIN "TokoATK".categories c ON p.category_id = c.id
+//             ORDER BY p.stock ASC    
+//         `)
+//     } catch (error) {
+//         res.status(500).json({
+//             massage: 'Gagal mengambil data stock',
+//             error: error.message
+//         })
+//     }
+//  })
+router.get(
+  "/stock",
+  authMiddleware,
+  roleMiddleware("admin"),
+  async (req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT 
+          p.id,
+          p.name,
+          p.stock,
+          p.purchase_price,
+          p.selling_price,
+          c.name AS category_name
+        FROM "TokoATK".products p
+        LEFT JOIN "TokoATK".categories c ON p.category_id = c.id
+        ORDER BY p.stock ASC
+      `);
+
+      res.json({
+        message: "Berhasil mengambil laporan stok produk",
+        data: result.rows,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Gagal mengambil laporan stok produk",
+        error: error.message,
+      });
+    }
+  }
+);
 export default router;
