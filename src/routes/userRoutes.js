@@ -1,8 +1,10 @@
 import express from "express";
 import {pool} from "../config/db.js";
 import bcrypt from "bcrypt";
-import authMiddleware from "../middleware/authMiddleware.js";
-import roleMiddleware from "../middleware/roleMiddleware.js";
+
+import authMiddleware from "../middleware/roleMiddleware.js"
+
+import roleMiddleware  from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
 router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
