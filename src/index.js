@@ -33,6 +33,7 @@ import productRoutes from "./routes/productRoutes.js"
 import SupplierRoutes from "./routes/supplierRoutes.js"
 import authRoutes from "./routes/authRoutes.js"
 import salesRoutes from "./routes/salesRoutes.js"
+import reporRoutes from "./routes/reportRoutes.js"
 dotenv.config();
 
 const app = express();
@@ -50,7 +51,8 @@ app.get("/", (req, res) => {
       customers: "/customers",
       products: "/products",
       suppliers:"/suppliers",
-      sales: "/sales"
+      sales: "/sales",
+      repor:"/report"
     },
   });
 });
@@ -61,6 +63,7 @@ app.use('/customers', customerRoutes);
 app.use('/products', productRoutes);
 app.use('/suppliers', SupplierRoutes);
 app.use('/sales', salesRoutes);
+app.use('/report', reporRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
