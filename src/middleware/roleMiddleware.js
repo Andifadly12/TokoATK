@@ -1,19 +1,13 @@
-const roleMiddleware = (roles) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return res.status(401).json({
-                message: "Unauthorized",
-            });
-        }
-        const hasRole = roles.some(role => req.user.roles.includes(role));
-        if (!hasRole) {
-            return res.status(403).json({
-                message: "Forbidden",
-            });
-        }
-        next();
-    };
+const roleMiddleware = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: "Akses ditolak, role tidak punya izin",
+      });
+    }
+
+    next();
+  };
 };
 
-
-export default roleMiddleware
+export default roleMiddleware;
