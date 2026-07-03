@@ -36,6 +36,35 @@ router.get("/summary", authMiddleware, roleMiddleware("admin"),  async (req, res
         })
     }
 })
- 
 
+
+router.get("/sales", authMiddleware, roleMiddleware("admin"), async (req, res) => { 
+    try {
+        const result = await pool.query(`
+            SELECT
+                s.id,
+                s.invoice_number,
+                s.total_amount,
+                s.paid_amount,
+                s.change_amount,
+                s.payment_method,
+                s.created_at,
+                c.name AS customer_name,
+                u.name AS cashier_name
+            FROM "TokoATK".sales s
+            LEFT JOIN "TokoATK".customers c ON s.customer_id = c.id
+            LEFT JOIN "TokoATK".users u ON s.user_id = u.id
+            ORDER BY s.created_at DESC
+            `);
+        res.json({
+            massage: "berhasil mengambil laporan penjualan ",
+            data:result.rows
+        })
+    } catch (error) {
+        res.status(500).json({
+            massage: "Gagal mengambil data summary",
+            error: error.message,
+        })
+    }
+})
 export default router;
