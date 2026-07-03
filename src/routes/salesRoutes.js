@@ -197,153 +197,212 @@ router.get("/:id", authMiddleware, roleMiddleware("admin", "kasir"), async (req,
 });
 
 // POST transaksi penjualan
-router.post("/", authMiddleware, roleMiddleware("admin", "kasir"), async (req, res) => {
-  const client = await pool.connect();
+router.post(
+  "/",
+  authMiddleware,
+  roleMiddleware("admin", "kasir"),
+  async (req, res) => {
+    const client = await pool.connect();
+    let transactionStarted = false;
 
-  try {
-    const {
-      customer_id,
-      paid_amount,
-      payment_method,
-      items
-    } = req.body;
+    try {
+      const { customer_id, paid_amount, payment_method, items } = req.body;
 
-    const user_id = req.user.id;
+      const user_id = req.user.id;
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({
-        message: "Items penjualan wajib diisi",
-      });
-    }
-
-    await client.query("BEGIN");
-
-    let totalAmount = 0;
-    const saleItems = [];
-
-    for (const item of items) {
-      const productResult = await client.query(
-        `
-        SELECT id, name, selling_price, stock
-        FROM "TokoATK".products
-        WHERE id = $1
-        `,
-        [item.product_id]
-      );
-
-      if (productResult.rows.length === 0) {
-        throw new Error(`Product dengan id ${item.product_id} tidak ditemukan`);
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          message: "Items penjualan wajib diisi dan harus berbentuk array",
+        });
       }
 
-      const product = productResult.rows[0];
-      const quantity = Number(item.quantity);
+      const paidAmount = Number(paid_amount);
 
-      if (quantity <= 0) {
-        throw new Error("Quantity harus lebih dari 0");
+      if (!paid_amount || isNaN(paidAmount) || paidAmount <= 0) {
+        return res.status(400).json({
+          message: "Paid amount / uang bayar wajib diisi dan harus lebih dari 0",
+        });
       }
 
-      if (product.stock < quantity) {
-        throw new Error(`Stok ${product.name} tidak cukup`);
+      const customerId = customer_id ? Number(customer_id) : null;
+
+      await client.query("BEGIN");
+      transactionStarted = true;
+
+      // Cek customer kalau customer_id dikirim
+      if (customerId) {
+        const customerResult = await client.query(
+          `
+          SELECT id, name
+          FROM "TokoATK".customers
+          WHERE id = $1
+          `,
+          [customerId]
+        );
+
+        if (customerResult.rows.length === 0) {
+          throw new Error(`Customer dengan id ${customerId} tidak ditemukan`);
+        }
       }
 
-      const price = Number(product.selling_price);
-      const subtotal = price * quantity;
+      let totalAmount = 0;
+      const saleItems = [];
 
-      totalAmount += subtotal;
+      // Cek setiap product dan hitung total
+      for (const item of items) {
+        const productId = Number(item.product_id);
+        const quantity = Number(item.quantity);
 
-      saleItems.push({
-        product_id: product.id,
-        quantity,
-        price,
-        subtotal,
-        product_name: product.name,
-      });
-    }
+        if (!productId || isNaN(productId)) {
+          throw new Error("Product ID wajib diisi dan harus berupa angka");
+        }
 
-    const paidAmount = Number(paid_amount);
+        if (!quantity || isNaN(quantity) || quantity <= 0) {
+          throw new Error("Quantity harus lebih dari 0");
+        }
 
-    if (paidAmount < totalAmount) {
-      throw new Error("Uang pembayaran kurang dari total belanja");
-    }
+        const productResult = await client.query(
+          `
+          SELECT id, name, selling_price, stock
+          FROM "TokoATK".products
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [productId]
+        );
 
-    const changeAmount = paidAmount - totalAmount;
+        if (productResult.rows.length === 0) {
+          throw new Error(`Product dengan id ${productId} tidak ditemukan`);
+        }
 
-    const invoiceNumber = `INV-${Date.now()}`;
+        const product = productResult.rows[0];
 
-    const saleResult = await client.query(
-      `
-      INSERT INTO "TokoATK".sales
-      (invoice_number, user_id, customer_id, total_amount, paid_amount, change_amount, payment_method)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-      `,
-      [
-        invoiceNumber,
-        user_id,
-        customer_id || null,
-        total_amount,
-        paidAmount,
-        changeAmount,
-        payment_method || "cash",
-      ]
-    );
+        if (Number(product.stock) < quantity) {
+          throw new Error(`Stok ${product.name} tidak cukup`);
+        }
 
-    const sale = saleResult.rows[0];
+        const price = Number(product.selling_price);
+        const subtotal = price * quantity;
 
-    for (const item of saleItems) {
-      await client.query(
+        totalAmount += subtotal;
+
+        saleItems.push({
+          product_id: product.id,
+          product_name: product.name,
+          quantity,
+          price,
+          subtotal,
+        });
+      }
+
+      if (paidAmount < totalAmount) {
+        throw new Error("Uang pembayaran kurang dari total belanja");
+      }
+
+      const changeAmount = paidAmount - totalAmount;
+      const invoiceNumber = `INV-${Date.now()}`;
+
+      // Simpan nota utama ke tabel sales
+      const saleResult = await client.query(
         `
-        INSERT INTO "TokoATK".sale_items
-        (sale_id, product_id, quantity, price, subtotal)
-        VALUES ($1, $2, $3, $4, $5)
-        `,
-        [sale.id, item.product_id, item.quantity, item.price, item.subtotal]
-      );
-
-      await client.query(
-        `
-        UPDATE "TokoATK".products
-        SET stock = stock - $1
-        WHERE id = $2
-        `,
-        [item.quantity, item.product_id]
-      );
-
-      await client.query(
-        `
-        INSERT INTO "TokoATK".stock_movements
-        (product_id, user_id, type, quantity, description)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO "TokoATK".sales
+        (
+          invoice_number,
+          user_id,
+          customer_id,
+          total_amount,
+          paid_amount,
+          change_amount,
+          payment_method
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
         `,
         [
-          item.product_id,
+          invoiceNumber,
           user_id,
-          "out",
-          item.quantity,
-          `Penjualan ${invoiceNumber}`,
+          customerId,
+          totalAmount,
+          paidAmount,
+          changeAmount,
+          payment_method || "cash",
         ]
       );
+
+      const sale = saleResult.rows[0];
+
+      // Simpan detail barang ke sale_items, kurangi stok, dan catat stock_movements
+      for (const item of saleItems) {
+        await client.query(
+          `
+          INSERT INTO "TokoATK".sale_items
+          (
+            sale_id,
+            product_id,
+            quantity,
+            price,
+            subtotal
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          `,
+          [sale.id, item.product_id, item.quantity, item.price, item.subtotal]
+        );
+
+        await client.query(
+          `
+          UPDATE "TokoATK".products
+          SET stock = stock - $1
+          WHERE id = $2
+          `,
+          [item.quantity, item.product_id]
+        );
+
+        await client.query(
+          `
+          INSERT INTO "TokoATK".stock_movements
+          (
+            product_id,
+            user_id,
+            type,
+            quantity,
+            description
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          `,
+          [
+            item.product_id,
+            user_id,
+            "out",
+            item.quantity,
+            `Penjualan ${invoiceNumber}`,
+          ]
+        );
+      }
+
+      await client.query("COMMIT");
+
+      res.status(201).json({
+        message: "Penjualan berhasil dibuat",
+        data: {
+          sale,
+          items: saleItems,
+        },
+      });
+    } catch (error) {
+      if (transactionStarted) {
+        await client.query("ROLLBACK");
+      }
+
+      console.log("ERROR CREATE SALE:", error.message);
+
+      res.status(500).json({
+        message: "Gagal membuat penjualan",
+        error: error.message,
+      });
+    } finally {
+      client.release();
     }
-
-    await client.query("COMMIT");
-
-    res.status(201).json({
-      message: "Penjualan berhasil dibuat",
-      data: {
-        sale,
-        items: saleItems,
-      },
-    });
-  } catch (error) {
-    await client.query("ROLLBACK");
-
-    res.status(500).json({
-      message: "Gagal membuat penjualan",
-      error: error.message,
-    });
-  } finally {
-    client.release();
   }
-});
+);
 
 export default router;
