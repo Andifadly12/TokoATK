@@ -23,5 +23,27 @@ router.get("/", async (req, res) => {
      }
 })
  
-
+router.get("/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT p.*, s.name AS supplier_name, u.name AS user_name
+            FROM purchases p
+            JOIN suppliers s ON p.suppiler_id = s.id
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id = $1`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Data pembelian tidak ditemukan" });
+        }
+        res.json({
+            message: "Data pembelian berhasil diambil",
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Terjadi kesalahan server" });
+    }
+});
 export default router;
