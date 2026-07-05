@@ -241,5 +241,221 @@ router.post("/", async (req, res) => {
 });
 
 
+// PUT update pembelian
+router.put("/:id", async (req, res) => {
+  const client = await pool.connect();
+  let transactionStarted = false;
 
+  try {
+    const { supplier_id, user_id, items } = req.body;
+    const purchaseId = req.params.id;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "Items pembelian wajib diisi",
+      });
+    }
+
+    await client.query("BEGIN");
+    transactionStarted = true;
+
+    // Cek pembelian lama
+    const oldPurchaseResult = await client.query(
+      `
+      SELECT *
+      FROM "TokoATK".purchases
+      WHERE id = $1
+      `,
+      [purchaseId]
+    );
+
+    if (oldPurchaseResult.rows.length === 0) {
+      throw new Error("Data pembelian tidak ditemukan");
+    }
+
+    const oldPurchase = oldPurchaseResult.rows[0];
+
+    // Ambil item pembelian lama
+    const oldItemsResult = await client.query(
+      `
+      SELECT *
+      FROM "TokoATK".purchase_items
+      WHERE purchase_id = $1
+      `,
+      [purchaseId]
+    );
+
+    // Kurangi stok dari item lama dulu
+    for (const oldItem of oldItemsResult.rows) {
+      const productResult = await client.query(
+        `
+        SELECT id, name, stock
+        FROM "TokoATK".products
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [oldItem.product_id]
+      );
+
+      if (productResult.rows.length === 0) {
+        throw new Error(`Product lama dengan id ${oldItem.product_id} tidak ditemukan`);
+      }
+
+      const product = productResult.rows[0];
+
+      if (Number(product.stock) < Number(oldItem.quantity)) {
+        throw new Error(
+          `Stok ${product.name} tidak cukup untuk mengubah pembelian. Kemungkinan barang sudah terjual.`
+        );
+      }
+
+      await client.query(
+        `
+        UPDATE "TokoATK".products
+        SET stock = stock - $1
+        WHERE id = $2
+        `,
+        [oldItem.quantity, oldItem.product_id]
+      );
+    }
+
+    // Hapus item pembelian lama
+    await client.query(
+      `
+      DELETE FROM "TokoATK".purchase_items
+      WHERE purchase_id = $1
+      `,
+      [purchaseId]
+    );
+
+    let totalAmount = 0;
+    const newPurchaseItems = [];
+
+    // Proses item baru
+    for (const item of items) {
+      const productId = Number(item.product_id);
+      const quantity = Number(item.quantity);
+      const price = Number(item.price);
+
+      if (!productId || quantity <= 0 || price <= 0) {
+        throw new Error("product_id, quantity, dan price wajib benar");
+      }
+
+      const productResult = await client.query(
+        `
+        SELECT id, name
+        FROM "TokoATK".products
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [productId]
+      );
+
+      if (productResult.rows.length === 0) {
+        throw new Error(`Product dengan id ${productId} tidak ditemukan`);
+      }
+
+      const product = productResult.rows[0];
+      const subtotal = quantity * price;
+
+      totalAmount += subtotal;
+
+      newPurchaseItems.push({
+        product_id: product.id,
+        product_name: product.name,
+        quantity,
+        price,
+        subtotal,
+      });
+    }
+
+    const supplierId = supplier_id ? Number(supplier_id) : oldPurchase.supplier_id;
+    const userId = user_id ? Number(user_id) : oldPurchase.user_id;
+
+    // Update tabel purchases
+    const updatedPurchaseResult = await client.query(
+      `
+      UPDATE "TokoATK".purchases
+      SET supplier_id = $1,
+          user_id = $2,
+          total_amount = $3
+      WHERE id = $4
+      RETURNING *
+      `,
+      [supplierId, userId, totalAmount, purchaseId]
+    );
+
+    const updatedPurchase = updatedPurchaseResult.rows[0];
+
+    // Masukkan item baru dan tambah stok
+    for (const item of newPurchaseItems) {
+      await client.query(
+        `
+        INSERT INTO "TokoATK".purchase_items
+        (
+          purchase_id,
+          product_id,
+          quantity,
+          price,
+          subtotal
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        `,
+        [purchaseId, item.product_id, item.quantity, item.price, item.subtotal]
+      );
+
+      await client.query(
+        `
+        UPDATE "TokoATK".products
+        SET stock = stock + $1,
+            purchase_price = $2
+        WHERE id = $3
+        `,
+        [item.quantity, item.price, item.product_id]
+      );
+
+      await client.query(
+        `
+        INSERT INTO "TokoATK".stock_movements
+        (
+          product_id,
+          user_id,
+          type,
+          quantity,
+          description
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          item.product_id,
+          userId,
+          "in",
+          item.quantity,
+          `Update pembelian ${updatedPurchase.invoice_number}`,
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    res.json({
+      message: "Pembelian berhasil diupdate dan stok disesuaikan",
+      data: {
+        purchase: updatedPurchase,
+        items: newPurchaseItems,
+      },
+    });
+  } catch (error) {
+    if (transactionStarted) {
+      await client.query("ROLLBACK");
+    }
+
+    res.status(500).json({
+      message: "Gagal update pembelian",
+      error: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
 export default router;
