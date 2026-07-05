@@ -458,4 +458,123 @@ router.put("/:id", async (req, res) => {
     client.release();
   }
 });
+
+
+
+// DELETE pembelian
+router.delete("/:id", async (req, res) => {
+  const client = await pool.connect();
+  let transactionStarted = false;
+
+  try {
+    const purchaseId = req.params.id;
+
+    await client.query("BEGIN");
+    transactionStarted = true;
+
+    const purchaseResult = await client.query(
+      `
+      SELECT *
+      FROM "TokoATK".purchases
+      WHERE id = $1
+      `,
+      [purchaseId]
+    );
+
+    if (purchaseResult.rows.length === 0) {
+      throw new Error("Data pembelian tidak ditemukan");
+    }
+
+    const purchase = purchaseResult.rows[0];
+
+    const itemResult = await client.query(
+      `
+      SELECT *
+      FROM "TokoATK".purchase_items
+      WHERE purchase_id = $1
+      `,
+      [purchaseId]
+    );
+
+    for (const item of itemResult.rows) {
+      const productResult = await client.query(
+        `
+        SELECT id, name, stock
+        FROM "TokoATK".products
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [item.product_id]
+      );
+
+      if (productResult.rows.length === 0) {
+        throw new Error(`Product dengan id ${item.product_id} tidak ditemukan`);
+      }
+
+      const product = productResult.rows[0];
+
+      if (Number(product.stock) < Number(item.quantity)) {
+        throw new Error(
+          `Stok ${product.name} tidak cukup untuk membatalkan pembelian. Kemungkinan barang sudah terjual.`
+        );
+      }
+
+      await client.query(
+        `
+        UPDATE "TokoATK".products
+        SET stock = stock - $1
+        WHERE id = $2
+        `,
+        [item.quantity, item.product_id]
+      );
+
+      await client.query(
+        `
+        INSERT INTO "TokoATK".stock_movements
+        (
+          product_id,
+          user_id,
+          type,
+          quantity,
+          description
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          item.product_id,
+          purchase.user_id,
+          "out",
+          item.quantity,
+          `Pembatalan pembelian ${purchase.invoice_number}`,
+        ]
+      );
+    }
+
+    await client.query(
+      `
+      DELETE FROM "TokoATK".purchases
+      WHERE id = $1
+      `,
+      [purchaseId]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      message: "Pembelian berhasil dihapus dan stok dikurangi",
+      data: purchase,
+    });
+  } catch (error) {
+    if (transactionStarted) {
+      await client.query("ROLLBACK");
+    }
+
+    res.status(500).json({
+      message: "Gagal hapus pembelian",
+      error: error.message,
+    });
+  } finally {
+    client.release();
+  }
+});
 export default router;
