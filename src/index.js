@@ -35,6 +35,8 @@ import authRoutes from "./routes/authRoutes.js"
 import salesRoutes from "./routes/salesRoutes.js"
 import reporRoutes from "./routes/reportRoutes.js"
 import purchasesRoutes from "./routes/purchasesRoutes.js"
+import swaggerUi from "swagger-ui-express";
+import swaggerDocument from "./doc/swagger.js";
 dotenv.config();
 
 const app = express();
@@ -67,7 +69,7 @@ app.use('/suppliers', SupplierRoutes);
 app.use('/sales', salesRoutes);
 app.use('/report', reporRoutes);
 app.use('/purchases', purchasesRoutes);
-
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
 });
