@@ -1,10 +1,11 @@
 import express from "express";
 import { pool } from "../config/db.js";
-
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
 // GET semua pembelian
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, roleMiddleware(["admin", "staff"]), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -35,7 +36,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET detail pembelian
-router.get("/:id", async (req, res) => {
+router.get("/:id", authMiddleware, roleMiddleware(["admin", "staff"]), async (req, res) => {
   try {
     const purchaseResult = await pool.query(
       `
@@ -96,7 +97,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST pembelian barang masuk
-router.post("/", async (req, res) => {
+router.post("/", authMiddleware, roleMiddleware(["admin", "staff"]), async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -242,7 +243,7 @@ router.post("/", async (req, res) => {
 
 
 // PUT update pembelian
-router.put("/:id", async (req, res) => {
+router.put("/:id", authMiddleware, roleMiddleware(["admin", "staff"]), async (req, res) => {
   const client = await pool.connect();
   let transactionStarted = false;
 
