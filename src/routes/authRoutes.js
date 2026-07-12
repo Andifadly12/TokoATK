@@ -2,7 +2,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { pool } from "../config/db.js";
-import  authMiddleware  from "../middleware/authMiddleware.js"
+import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -22,7 +22,7 @@ router.post("/register", async (req, res) => {
       FROM "TokoATK".users
       WHERE email = $1
       `,
-      [email]
+      [email],
     );
 
     if (checkEmail.rows.length > 0) {
@@ -40,7 +40,7 @@ router.post("/register", async (req, res) => {
       VALUES ($1, $2, $3, $4)
       RETURNING id, name, email, role, created_at
       `,
-      [name, email, hashedPassword, role || "kasir"]
+      [name, email, hashedPassword, role || "kasir"],
     );
 
     res.status(201).json({
@@ -73,7 +73,7 @@ router.post("/login", async (req, res) => {
       FROM "TokoATK".users
       WHERE email = $1
       `,
-      [email]
+      [email],
     );
 
     if (result.rows.length === 0) {
@@ -102,7 +102,7 @@ router.post("/login", async (req, res) => {
       process.env.JWT_SECRET,
       {
         expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-      }
+      },
     );
 
     res.json({
