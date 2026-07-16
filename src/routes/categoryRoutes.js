@@ -1,64 +1,180 @@
 import express from "express";
 import { pool } from "../config/db.js";
-import authMiddleware from "../middleware/authMiddleware.js"
-import roleMiddleware  from "../middleware/roleMiddleware.js";
+import authMiddleware from "../middleware/authMiddleware.js";
+import roleMiddleware from "../middleware/roleMiddleware.js";
+
 const router = express.Router();
 
-router.get('/',authMiddleware, roleMiddleware("admin"), async (req, res) => {
+router.get("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        name,
+        description,
+        status,
+        total_products,
+        created_at
+      FROM "TokoATK".categories
+      ORDER BY id ASC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("ERROR fetching categories:", error.message);
+
+    res.status(500).json({
+      message: "Gagal mengambil data kategori",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/", authMiddleware, roleMiddleware("admin"), async (req, res) => {
+  try {
+    const { name, description, status, total_products } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        message: "Nama kategori wajib diisi",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO "TokoATK".categories
+      (
+        name,
+        description,
+        status,
+        total_products
+      )
+      VALUES ($1, $2, $3, $4)
+      RETURNING
+        id,
+        name,
+        description,
+        status,
+        total_products,
+        created_at
+      `,
+      [
+        name.trim(),
+        description || "",
+        status || "active",
+        Number(total_products || 0),
+      ],
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("ERROR adding category:", error.message);
+
+    res.status(500).json({
+      message: "Gagal menambah kategori",
+      error: error.message,
+    });
+  }
+});
+
+router.put(
+  "/:id",
+  authMiddleware,
+  roleMiddleware("admin"),
+  async (req, res) => {
     try {
-        const result = await pool.query(
-            `SELECT * FROM "TokoATK".categories ORDER BY id ASC`
-        );
-        res.json(result.rows);
+      const { name, description, status, total_products } = req.body;
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({
+          message: "Nama kategori wajib diisi",
+        });
+      }
+
+      const result = await pool.query(
+        `
+      UPDATE "TokoATK".categories
+      SET
+        name = $1,
+        description = $2,
+        status = $3,
+        total_products = $4
+      WHERE id = $5
+      RETURNING
+        id,
+        name,
+        description,
+        status,
+        total_products,
+        created_at
+      `,
+        [
+          name.trim(),
+          description || "",
+          status || "active",
+          Number(total_products || 0),
+          req.params.id,
+        ],
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: "Kategori tidak ditemukan",
+        });
+      }
+
+      res.json(result.rows[0]);
     } catch (error) {
-        console.error('Error fetching categories:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+      console.error("ERROR updating category:", error.message);
 
-router.post('/',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
-    
+      res.status(500).json({
+        message: "Gagal update kategori",
+        error: error.message,
+      });
+    }
+  },
+);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  roleMiddleware("admin"),
+  async (req, res) => {
     try {
-        const {name}= req.body;
-        const result = await pool.query(
-            `INSERT INTO "TokoATK".categories (name) VALUES ($1) RETURNING id, name, created_at`,
-            [name]
-        );
-         res.status(201).json(result.rows[0]);
-    }catch(error){
-        console.error('ERROR adding category:', error);
-        res.status(500).json({error:'internalserver error'});
-    }
-})
+      const result = await pool.query(
+        `
+        DELETE FROM "TokoATK".categories
+        WHERE id = $1
+        RETURNING
+          id,
+          name,
+          description,
+          status,
+          total_products,
+          created_at
+        `,
+        [req.params.id],
+      );
 
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: "Kategori tidak ditemukan",
+        });
+      }
 
-router.put('/:id',authMiddleware, roleMiddleware("admin"), async (req, res)=>{
-    try{
-        const {name}= req.body;
-        const result= await pool.query(`UPDATE "TokoATK".categories SET name = $1 WHERE id = $2 RETURNING *`, [name, req.params.id])
-        res.json(result.rows[0])
-    }catch(error){
-        console.error('ERROR updating category:', error);
-      return  res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-router.delete('/:id',authMiddleware, roleMiddleware("admin"), async (req, res) => {
-    try {
-        const result = await pool.query(
-            `DELETE FROM "TokoATK".categories WHERE id = $1 RETURNING id, name`,
-            [req.params.id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Category not found' });
-        }
-
-        res.json({ message: 'Category deleted', category: result.rows[0] });
+      res.json({
+        message: "Kategori berhasil dihapus",
+        data: result.rows[0],
+      });
     } catch (error) {
-        console.error('ERROR deleting category:', error);
-        res.status(500).json({ error: 'Internal server error' });
+      console.error("ERROR deleting category:", error.message);
+
+      res.status(500).json({
+        message: "Gagal hapus kategori",
+        error: error.message,
+      });
     }
-});
+  },
+);
 
 export default router;
